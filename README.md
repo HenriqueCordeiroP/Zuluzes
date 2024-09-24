@@ -1,2 +1,2 @@
 # Zuluzes
- Embeddes System Pushup Counter Project
+ Embedded Systems Pushup Counter Project
