@@ -55,12 +55,12 @@ static void MX_USART2_UART_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
-
+void Zuluzes(void *argument);
+int bothButtonsPressed();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -120,6 +120,12 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  xTaskCreate(Zuluzes,
+  "Zuluzes",
+  configMINIMAL_STACK_SIZE,
+  NULL,
+  tskIDLE_PRIORITY,
+  NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -240,7 +246,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|GPIO_PIN_10, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -248,19 +254,79 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LD2_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin;
+  /*Configure GPIO pins : LD2_Pin PA10 */
+  GPIO_InitStruct.Pin = LD2_Pin|GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA8 PA9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+void Zuluzes(void *argument)
+{
 
+	/*
+	 * TODO add supersonic sensor
+	 * TODO count pushup per proximity
+	 * TODO use led to display counter (customizable)
+	 * TODO add delay to check for idle
+	 * */
+
+	int pushupCounter = 0;
+	for(;;){
+		// PA10 - D2 - Led
+		if (bothButtonsPressed())
+		{
+			while(pushupCounter < 5){
+				if(!bothButtonsPressed()){
+					break;
+				}
+				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
+				pushupCounter ++;
+				HAL_Delay(250);
+				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+				HAL_Delay(1000);
+			}
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
+			HAL_Delay(100);
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+			HAL_Delay(100);
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
+			HAL_Delay(100);
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+			HAL_Delay(100);
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
+			HAL_Delay(100);
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+			pushupCounter = 0;
+		}
+		else
+		{
+			pushupCounter = 0;
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+		}
+	}
+}
+
+int bothButtonsPressed(){
+	// PA8 - D7 - Button 1
+	// PA9 - D8 - Button 2
+
+	GPIO_PinState button1State = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8);
+	GPIO_PinState button2State = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9);
+
+	return (button1State == 0 && button2State == 0) ? 1 : 0;
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
