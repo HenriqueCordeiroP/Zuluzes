@@ -32,7 +32,12 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define TRIG_PIN GPIO_PIN_6
+#define TRIG_PORT GPIOB
+#define ECHO_PIN GPIO_PIN_7
+#define ECHO_PORT GPIOC
+#define PUSHUP_DOWN_DISTANCE_CM 10
+#define PUSHUP_UP_DISTANCE_CM 30
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,22 +46,34 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim2;
+
 UART_HandleTypeDef huart2;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
+uint32_t echoStart = 0;
+uint32_t echoEnd = 0;
+uint32_t echoDuration = 0;
+char buttonBuffer[50];
+char ultraBuffer[50];
 
+uint32_t pushupCounter = 0;
+uint8_t isButtonsPressed = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM2_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
-void Zuluzes(void *argument);
-int bothButtonsPressed();
+void AreButtonsPressedTask(void *argument);
+void UltrasonicTask(void *argument);
+void Trigger_Ultrasonic(void);
+uint32_t Get_Distance(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -93,6 +110,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -107,6 +125,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
+  HAL_TIM_Base_Start(&htim2);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -120,12 +139,21 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-  xTaskCreate(Zuluzes,
-  "Zuluzes",
-  configMINIMAL_STACK_SIZE,
-  NULL,
-  tskIDLE_PRIORITY,
-  NULL);
+
+	  xTaskCreate(UltrasonicTask,
+	  "UltrasonicTask",
+	  configMINIMAL_STACK_SIZE,
+	  NULL,
+	  tskIDLE_PRIORITY,
+	  NULL);
+
+	  xTaskCreate(AreButtonsPressedTask,
+	  "AreButtonsPressedTask",
+	  configMINIMAL_STACK_SIZE,
+	  NULL,
+	  tskIDLE_PRIORITY,
+	  NULL);
+
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -169,7 +197,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLN = 9;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
@@ -191,6 +219,51 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 72-1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
 }
 
 /**
@@ -248,6 +321,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, LD2_Pin|GPIO_PIN_10, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -261,71 +337,103 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PC7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PA8 PA9 */
   GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PB6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-void Zuluzes(void *argument)
-{
-
 	/*
-	 * TODO add supersonic sensor
+	 * global counter, global isButtonPressed
 	 * TODO count pushup per proximity
 	 * TODO use led to display counter (customizable)
 	 * TODO add delay to check for idle
 	 * */
 
-	int pushupCounter = 0;
+void AreButtonsPressedTask(void *argument){
+	// PA8 - D7 - Button 1
+	// PA9 - D8 - Button 2
+
 	for(;;){
-		// PA10 - D2 - Led
-		if (bothButtonsPressed())
-		{
-			while(pushupCounter < 5){
-				if(!bothButtonsPressed()){
-					break;
-				}
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
-				pushupCounter ++;
-				HAL_Delay(250);
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
-				HAL_Delay(1000);
-			}
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
-			HAL_Delay(100);
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
-			HAL_Delay(100);
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
-			HAL_Delay(100);
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
-			HAL_Delay(100);
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 1);
-			HAL_Delay(100);
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
-			pushupCounter = 0;
-		}
-		else
-		{
-			pushupCounter = 0;
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, 0);
+		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8) == GPIO_PIN_RESET  || HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9) == GPIO_PIN_RESET){
+			isButtonsPressed = 1;
+		} else {
+			isButtonsPressed = 0;
 		}
 	}
 }
 
-int bothButtonsPressed(){
-	// PA8 - D7 - Button 1
-	// PA9 - D8 - Button 2
+void UltrasonicTask(void *argument)
+{
+        uint8_t downOk = 0;
+	for(;;)
+    {
 
-	GPIO_PinState button1State = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8);
-	GPIO_PinState button2State = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9);
+        Trigger_Ultrasonic();
 
-	return (button1State == 0 && button2State == 0) ? 1 : 0;
+        uint32_t distance = Get_Distance();
+        if(isButtonsPressed){
+        	if(distance <= PUSHUP_DOWN_DISTANCE_CM && !downOk ){
+        		downOk = 1;
+        	}
+        	else if(distance >= PUSHUP_UP_DISTANCE_CM && downOk){
+        		pushupCounter++;
+        		downOk = 0;
+        	}
+        } else {
+        	pushupCounter = 0;
+        }
+
+
+        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
+		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+        osDelay(500);
+    }
+}
+
+void Trigger_Ultrasonic(void)
+{
+	// PC7 - D9 - Ultrasonic ECHO
+	// PB6 - D10 - Ultrasonic Trigger
+
+    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);
+    osDelay(1);
+    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);
+}
+
+uint32_t Get_Distance(void)
+{
+    while (HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_RESET);
+
+    echoStart = __HAL_TIM_GET_COUNTER(&htim2);
+
+    while (HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_SET);
+
+    echoEnd = __HAL_TIM_GET_COUNTER(&htim2);
+
+    echoDuration = echoEnd - echoStart;
+
+    uint32_t distance = (echoDuration * 0.0343) / 2;
+
+    return distance;
 }
 /* USER CODE END 4 */
 
