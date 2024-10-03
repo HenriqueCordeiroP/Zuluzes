@@ -144,7 +144,7 @@ int main(void)
 	  "UltrasonicTask",
 	  configMINIMAL_STACK_SIZE,
 	  NULL,
-	  tskIDLE_PRIORITY,
+	  2,
 	  NULL);
 
 	  xTaskCreate(AreButtonsPressedTask,
