@@ -72,6 +72,7 @@ void StartDefaultTask(void const * argument);
 /* USER CODE BEGIN PFP */
 void AreButtonsPressedTask(void *argument);
 void UltrasonicTask(void *argument);
+void LedCounterTask(void *argument);
 void Trigger_Ultrasonic(void);
 uint32_t Get_Distance(void);
 /* USER CODE END PFP */
@@ -144,11 +145,18 @@ int main(void)
 	  "UltrasonicTask",
 	  configMINIMAL_STACK_SIZE,
 	  NULL,
-	  2,
+	  1,
 	  NULL);
 
 	  xTaskCreate(AreButtonsPressedTask,
 	  "AreButtonsPressedTask",
+	  configMINIMAL_STACK_SIZE,
+	  NULL,
+	  tskIDLE_PRIORITY,
+	  NULL);
+
+	  xTaskCreate(LedCounterTask,
+	  "LedCounterTask",
 	  configMINIMAL_STACK_SIZE,
 	  NULL,
 	  tskIDLE_PRIORITY,
@@ -362,10 +370,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 	/*
-	 * global counter, global isButtonPressed
-	 * TODO count pushup per proximity
 	 * TODO use led to display counter (customizable)
-	 * TODO add delay to check for idle
 	 * */
 
 void AreButtonsPressedTask(void *argument){
@@ -403,8 +408,8 @@ void UltrasonicTask(void *argument)
         }
 
 
-        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
-		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+//        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
+//		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
         osDelay(500);
     }
 }
@@ -434,6 +439,19 @@ uint32_t Get_Distance(void)
     uint32_t distance = (echoDuration * 0.0343) / 2;
 
     return distance;
+}
+
+void LedCounterTask(void *argument){
+	// PA8 - D7 - Button 1
+	// PA9 - D8 - Button 2
+
+	for(;;){
+		if(pushupCounter % 2 != 0){
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+		} else {
+			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+		}
+	}
 }
 /* USER CODE END 4 */
 
