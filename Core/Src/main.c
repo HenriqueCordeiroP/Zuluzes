@@ -36,8 +36,11 @@
 #define TRIG_PORT GPIOB
 #define ECHO_PIN GPIO_PIN_7
 #define ECHO_PORT GPIOC
+#define BUZZER_PIN GPIO_PIN_5
+#define BUZZER_PORT GPIOB
 #define PUSHUP_DOWN_DISTANCE_CM 10
 #define PUSHUP_UP_DISTANCE_CM 30
+#define TARGET 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -71,10 +74,11 @@ void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 void AreButtonsPressedTask(void *argument);
-void UltrasonicTask(void *argument);
+void PushupCounterTask(void *argument);
 void LedCounterTask(void *argument);
 void Trigger_Ultrasonic(void);
 uint32_t Get_Distance(void);
+void handleWin(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,8 +145,8 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
 
-	  xTaskCreate(UltrasonicTask,
-	  "UltrasonicTask",
+	  xTaskCreate(PushupCounterTask,
+	  "PushupCounterTask",
 	  configMINIMAL_STACK_SIZE,
 	  NULL,
 	  1,
@@ -330,7 +334,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, LD2_Pin|GPIO_PIN_10, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5|GPIO_PIN_6, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -357,14 +361,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PB6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  /*Configure GPIO pins : PB5 PB6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /*
+   * ON IOC CHANGE, UPDATE THE PA8 AND PA9 PINS TO GPIO_PULLUP
+   */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
@@ -376,9 +383,14 @@ static void MX_GPIO_Init(void)
 void AreButtonsPressedTask(void *argument){
 	// PA8 - D7 - Button 1
 	// PA9 - D8 - Button 2
+	const uint16_t BUTTON_1_PIN = GPIO_PIN_8;
+	GPIO_TypeDef* BUTTON_1_PORT = GPIOA;
+
+	const uint16_t BUTTON_2_PIN = GPIO_PIN_9;
+	GPIO_TypeDef* BUTTON_2_PORT = GPIOA;
 
 	for(;;){
-		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8) == GPIO_PIN_RESET  || HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9) == GPIO_PIN_RESET){
+		if(HAL_GPIO_ReadPin(BUTTON_1_PORT, BUTTON_1_PIN) == GPIO_PIN_RESET  || HAL_GPIO_ReadPin(BUTTON_2_PORT, BUTTON_2_PIN) == GPIO_PIN_RESET){
 			isButtonsPressed = 1;
 		} else {
 			isButtonsPressed = 0;
@@ -386,7 +398,11 @@ void AreButtonsPressedTask(void *argument){
 	}
 }
 
-void UltrasonicTask(void *argument)
+#define TRIG_PIN GPIO_PIN_6
+#define TRIG_PORT GPIOB
+#define ECHO_PIN GPIO_PIN_7
+#define ECHO_PORT GPIOC
+void PushupCounterTask(void *argument)
 {
         uint8_t downOk = 0;
 	for(;;)
@@ -396,20 +412,25 @@ void UltrasonicTask(void *argument)
 
         uint32_t distance = Get_Distance();
         if(isButtonsPressed){
-        	if(distance <= PUSHUP_DOWN_DISTANCE_CM && !downOk ){
-        		downOk = 1;
-        	}
-        	else if(distance >= PUSHUP_UP_DISTANCE_CM && downOk){
-        		pushupCounter++;
-        		downOk = 0;
+        	if(pushupCounter < TARGET){
+        		if(distance <= PUSHUP_DOWN_DISTANCE_CM && !downOk ){
+        			downOk = 1;
+        		}
+        		else if(distance >= PUSHUP_UP_DISTANCE_CM && downOk){
+        			pushupCounter++;
+        			downOk = 0;
+        		}
+        	} else {
+        		handleWin();
+        		pushupCounter = 0;
+        		osDelay(500);
         	}
         } else {
         	pushupCounter = 0;
         }
 
-
-//        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
-//		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
+		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
         osDelay(500);
     }
 }
@@ -441,15 +462,42 @@ uint32_t Get_Distance(void)
     return distance;
 }
 
+
+void handleWin(void){
+//	sprintf(ultraBuffer, "WIN WIN WIN\r\n");
+//	HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+	playSound(1000, 200);
+}
+
+void playSound(uint32_t frequency, uint32_t duration_ms){
+	uint32_t period_us = 1000000 / frequency;
+	uint32_t half_period_us = period_us / 2;
+
+	uint32_t startTick = HAL_GetTick();
+
+	while ((HAL_GetTick() - startTick) < duration_ms)
+	{
+		HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
+		osDelay(half_period_us / 1000);
+
+		HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
+		osDelay(half_period_us / 1000);
+	}
+}
+
 void LedCounterTask(void *argument){
 	// PA8 - D7 - Button 1
 	// PA9 - D8 - Button 2
 
+
+	// TODO add 5 leds and turn on with counter
+	const uint16_t LED_1_PIN = GPIO_PIN_10;
+	GPIO_TypeDef* LED_1_PORT = GPIOA;
 	for(;;){
 		if(pushupCounter % 2 != 0){
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(LED_1_PORT, LED_1_PIN, GPIO_PIN_SET);
 		} else {
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED_1_PORT, LED_1_PIN, GPIO_PIN_RESET);
 		}
 	}
 }
