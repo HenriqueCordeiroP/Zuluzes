@@ -79,6 +79,7 @@ void LedCounterTask(void *argument);
 void Trigger_Ultrasonic(void);
 uint32_t Get_Distance(void);
 void handleWin(void);
+void playSound(uint32_t frequency, uint32_t duration_ms);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -466,7 +467,122 @@ uint32_t Get_Distance(void)
 void handleWin(void){
 //	sprintf(ultraBuffer, "WIN WIN WIN\r\n");
 //	HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
-	playSound(1000, 200);
+
+	// caza
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	osDelay(220);
+
+	// caza
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	osDelay(220);
+
+	// caza caza caza
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	osDelay(220);
+
+	// a turma é mesmo boa
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+
+	osDelay(220);
+
+	// é mesmo da fuzaca
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	osDelay(220);
+
+	// sport
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	osDelay(220);
+
+	// sport
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
+
+	osDelay(220);
+
+	// sport
+	playSound(300, 200);
+	osDelay(20);
+
+	playSound(300, 200);
+	osDelay(20);
 }
 
 void playSound(uint32_t frequency, uint32_t duration_ms){
@@ -489,8 +605,6 @@ void LedCounterTask(void *argument){
 	// PA8 - D7 - Button 1
 	// PA9 - D8 - Button 2
 
-
-	// TODO add 5 leds and turn on with counter
 	const uint16_t LED_1_PIN = GPIO_PIN_10;
 	GPIO_TypeDef* LED_1_PORT = GPIOA;
 	for(;;){
