@@ -32,12 +32,25 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define TRIG_PIN GPIO_PIN_6
+// D15
+#define TRIG_PIN GPIO_PIN_8
 #define TRIG_PORT GPIOB
-#define ECHO_PIN GPIO_PIN_7
-#define ECHO_PORT GPIOC
-#define BUZZER_PIN GPIO_PIN_5
-#define BUZZER_PORT GPIOB
+
+// D14
+#define ECHO_PIN GPIO_PIN_9
+#define ECHO_PORT GPIOB
+
+// D13
+#define BUTTON_1_PIN GPIO_PIN_5
+#define BUTTON_1_PORT GPIOA
+
+// D12
+#define BUTTON_2_PIN GPIO_PIN_6
+#define BUTTON_2_PORT GPIOA
+
+// D11
+#define BUZZER_PIN GPIO_PIN_7
+#define BUZZER_PORT GPIOA
 #define PUSHUP_DOWN_DISTANCE_CM 10
 #define PUSHUP_UP_DISTANCE_CM 30
 #define TARGET 1
@@ -55,9 +68,6 @@ UART_HandleTypeDef huart2;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
-uint32_t echoStart = 0;
-uint32_t echoEnd = 0;
-uint32_t echoDuration = 0;
 char buttonBuffer[50];
 char ultraBuffer[50];
 
@@ -332,10 +342,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LD2_Pin|GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7|GPIO_PIN_10, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5|GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -343,30 +353,30 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD2_Pin PA10 */
-  GPIO_InitStruct.Pin = LD2_Pin|GPIO_PIN_10;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PC7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PA8 PA9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
+  /*Configure GPIO pins : PA5 PA6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB5 PB6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
+  /*Configure GPIO pins : PA7 PA10 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -377,21 +387,11 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-	/*
-	 * TODO use led to display counter (customizable)
-	 * */
 
 void AreButtonsPressedTask(void *argument){
-	// PA8 - D7 - Button 1
-	// PA9 - D8 - Button 2
-	const uint16_t BUTTON_1_PIN = GPIO_PIN_8;
-	GPIO_TypeDef* BUTTON_1_PORT = GPIOA;
-
-	const uint16_t BUTTON_2_PIN = GPIO_PIN_9;
-	GPIO_TypeDef* BUTTON_2_PORT = GPIOA;
 
 	for(;;){
-		if(HAL_GPIO_ReadPin(BUTTON_1_PORT, BUTTON_1_PIN) == GPIO_PIN_RESET  || HAL_GPIO_ReadPin(BUTTON_2_PORT, BUTTON_2_PIN) == GPIO_PIN_RESET){
+		if(HAL_GPIO_ReadPin(BUTTON_1_PORT, BUTTON_1_PIN) == GPIO_PIN_RESET  && HAL_GPIO_ReadPin(BUTTON_2_PORT, BUTTON_2_PIN) == GPIO_PIN_RESET){
 			isButtonsPressed = 1;
 		} else {
 			isButtonsPressed = 0;
@@ -399,10 +399,6 @@ void AreButtonsPressedTask(void *argument){
 	}
 }
 
-#define TRIG_PIN GPIO_PIN_6
-#define TRIG_PORT GPIOB
-#define ECHO_PIN GPIO_PIN_7
-#define ECHO_PORT GPIOC
 void PushupCounterTask(void *argument)
 {
         uint8_t downOk = 0;
@@ -430,17 +426,14 @@ void PushupCounterTask(void *argument)
         	pushupCounter = 0;
         }
 
-        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
-		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+//        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
+//		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
         osDelay(500);
     }
 }
 
 void Trigger_Ultrasonic(void)
 {
-	// PC7 - D9 - Ultrasonic ECHO
-	// PB6 - D10 - Ultrasonic Trigger
-
     HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);
     osDelay(1);
     HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);
@@ -448,6 +441,10 @@ void Trigger_Ultrasonic(void)
 
 uint32_t Get_Distance(void)
 {
+	uint32_t echoStart = 0;
+	uint32_t echoEnd = 0;
+	uint32_t echoDuration = 0;
+
     while (HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_RESET);
 
     echoStart = __HAL_TIM_GET_COUNTER(&htim2);
