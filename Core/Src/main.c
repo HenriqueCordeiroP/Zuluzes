@@ -51,9 +51,51 @@
 // D11
 #define BUZZER_PIN GPIO_PIN_7
 #define BUZZER_PORT GPIOA
+
+// 10 SEGMENT DISPLAY
+// D10
+#define SEGMENT_1_PIN GPIO_PIN_6
+#define SEGMENT_1_PORT GPIOB
+
+// D9
+#define SEGMENT_2_PIN GPIO_PIN_7
+#define SEGMENT_2_PORT GPIOC
+
+// D8
+#define SEGMENT_3_PIN GPIO_PIN_6
+#define SEGMENT_3_PORT GPIOB
+
+// D7
+#define SEGMENT_4_PIN GPIO_PIN_8
+#define SEGMENT_4_PORT GPIOA
+
+// D6
+#define SEGMENT_5_PIN GPIO_PIN_10
+#define SEGMENT_5_PORT GPIOB
+
+// D5
+#define SEGMENT_6_PIN GPIO_PIN_4
+#define SEGMENT_6_PORT GPIOB
+
+// D4
+#define SEGMENT_7_PIN GPIO_PIN_5
+#define SEGMENT_7_PORT GPIOB
+
+// D3
+#define SEGMENT_8_PIN GPIO_PIN_3
+#define SEGMENT_8_PORT GPIOB
+
+// D2
+#define SEGMENT_9_PIN GPIO_PIN_10
+#define SEGMENT_9_PORT GPIOA
+
+// D1
+#define SEGMENT_10_PIN GPIO_PIN_2
+#define SEGMENT_10_PORT GPIOA
+
 #define PUSHUP_DOWN_DISTANCE_CM 10
 #define PUSHUP_UP_DISTANCE_CM 30
-#define TARGET 1
+#define TARGET 10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,8 +106,6 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
 
-UART_HandleTypeDef huart2;
-
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
 char buttonBuffer[50];
@@ -73,12 +113,37 @@ char ultraBuffer[50];
 
 uint32_t pushupCounter = 0;
 uint8_t isButtonsPressed = 0;
+
+GPIO_TypeDef* SEGMENT_PORTS[10] = {
+	SEGMENT_1_PORT,
+	SEGMENT_2_PORT,
+	SEGMENT_3_PORT,
+	SEGMENT_4_PORT,
+	SEGMENT_5_PORT,
+	SEGMENT_6_PORT,
+	SEGMENT_7_PORT,
+	SEGMENT_8_PORT,
+	SEGMENT_9_PORT,
+	SEGMENT_10_PORT
+};
+
+uint16_t SEGMENT_PINS[10] = {
+	SEGMENT_1_PIN,
+	SEGMENT_2_PIN,
+	SEGMENT_3_PIN,
+	SEGMENT_4_PIN,
+	SEGMENT_5_PIN,
+	SEGMENT_6_PIN,
+	SEGMENT_7_PIN,
+	SEGMENT_8_PIN,
+	SEGMENT_9_PIN,
+	SEGMENT_10_PIN
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 void StartDefaultTask(void const * argument);
 
@@ -90,6 +155,7 @@ void Trigger_Ultrasonic(void);
 uint32_t Get_Distance(void);
 void handleWin(void);
 void playSound(uint32_t frequency, uint32_t duration_ms);
+void reset(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -125,7 +191,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
@@ -290,41 +355,6 @@ static void MX_TIM2_Init(void)
 }
 
 /**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -342,10 +372,15 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7|GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
+                          |GPIO_PIN_10, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
+                          |GPIO_PIN_6|GPIO_PIN_8, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -353,25 +388,44 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : PA2 PA7 PA8 PA9
+                           PA10 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
+                          |GPIO_PIN_10;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pins : PA5 PA6 */
   GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA7 PA10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_10;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PB8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  /*Configure GPIO pins : PB10 PB3 PB4 PB5
+                           PB6 PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
+                          |GPIO_PIN_6|GPIO_PIN_8;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PC7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB9 */
   GPIO_InitStruct.Pin = GPIO_PIN_9;
@@ -419,11 +473,11 @@ void PushupCounterTask(void *argument)
         		}
         	} else {
         		handleWin();
-        		pushupCounter = 0;
+        		reset();
         		osDelay(500);
         	}
         } else {
-        	pushupCounter = 0;
+        	reset();
         }
 
 //        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
@@ -460,10 +514,16 @@ uint32_t Get_Distance(void)
     return distance;
 }
 
+void reset(void){
+	pushupCounter = 0;
+	for(int i = 0 ; i < TARGET ; i ++){
+		HAL_GPIO_WritePin(SEGMENT_PORTS[i], SEGMENT_PINS[i], GPIO_PIN_RESET);
+	}
+}
 
 void handleWin(void){
 //	sprintf(ultraBuffer, "WIN WIN WIN\r\n");
-//	HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+//	HAL_UART_Transmit(&huart4, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
 
 	// caza
 	playSound(300, 200);
@@ -598,20 +658,24 @@ void playSound(uint32_t frequency, uint32_t duration_ms){
 	}
 }
 
+// TODO find out why 1 segment is blinking, 3 and 10 segment is not lighting
 void LedCounterTask(void *argument){
-	// PA8 - D7 - Button 1
-	// PA9 - D8 - Button 2
 
-	const uint16_t LED_1_PIN = GPIO_PIN_10;
-	GPIO_TypeDef* LED_1_PORT = GPIOA;
 	for(;;){
-		if(pushupCounter % 2 != 0){
-			HAL_GPIO_WritePin(LED_1_PORT, LED_1_PIN, GPIO_PIN_SET);
-		} else {
-			HAL_GPIO_WritePin(LED_1_PORT, LED_1_PIN, GPIO_PIN_RESET);
+		int32_t TOTAL_LEDS = 10;
+		int32_t ledCount = pushupCounter % TOTAL_LEDS;
+		for (int i = 0; i < TOTAL_LEDS; i++) {
+			if (i < ledCount) {
+				HAL_GPIO_WritePin(SEGMENT_PORTS[i], SEGMENT_PINS[i], GPIO_PIN_SET);
+			} else {
+				HAL_GPIO_WritePin(SEGMENT_PORTS[i], SEGMENT_PINS[i], GPIO_PIN_RESET);
+			}
 		}
+
+		osDelay(500);
 	}
 }
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
