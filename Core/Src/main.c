@@ -22,7 +22,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,8 +64,8 @@
 #define SEGMENT_2_PORT GPIOC
 
 // D8
-#define SEGMENT_3_PIN GPIO_PIN_6
-#define SEGMENT_3_PORT GPIOB
+#define SEGMENT_3_PIN GPIO_PIN_9
+#define SEGMENT_3_PORT GPIOA
 
 // D7
 #define SEGMENT_4_PIN GPIO_PIN_8
@@ -85,17 +87,16 @@
 #define SEGMENT_8_PIN GPIO_PIN_3
 #define SEGMENT_8_PORT GPIOB
 
-// D2
-#define SEGMENT_9_PIN GPIO_PIN_10
-#define SEGMENT_9_PORT GPIOA
+// CN10 34
+#define SEGMENT_9_PIN GPIO_PIN_13
+#define SEGMENT_9_PORT GPIOB
 
-// D1
-#define SEGMENT_10_PIN GPIO_PIN_2
-#define SEGMENT_10_PORT GPIOA
+// CN10 30
+#define SEGMENT_10_PIN GPIO_PIN_4
+#define SEGMENT_10_PORT GPIOC
 
 #define PUSHUP_DOWN_DISTANCE_CM 10
 #define PUSHUP_UP_DISTANCE_CM 30
-#define TARGET 10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -106,10 +107,18 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
 
+UART_HandleTypeDef huart2;
+
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
+TaskHandle_t PushupCounterTaskHandle;
+TaskHandle_t AreButtonsPressedTaskHandle;
+TaskHandle_t LedCounterTaskHandle;
+
 char buttonBuffer[50];
 char ultraBuffer[50];
+
+uint32_t PUSHUP_TARGET= 10;
 
 uint32_t pushupCounter = 0;
 uint8_t isButtonsPressed = 0;
@@ -145,17 +154,20 @@ uint16_t SEGMENT_PINS[10] = {
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_USART2_UART_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
+void setPushupTarget(void);
 void AreButtonsPressedTask(void *argument);
 void PushupCounterTask(void *argument);
-void LedCounterTask(void *argument);
 void Trigger_Ultrasonic(void);
 uint32_t Get_Distance(void);
 void handleWin(void);
 void playSound(uint32_t frequency, uint32_t duration_ms);
 void reset(void);
+void LedCounterTask(void *argument);
+void CheckForExitTask(void *argument);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -192,7 +204,10 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM2_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  setPushupTarget();
 
   /* USER CODE END 2 */
 
@@ -221,26 +236,35 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
 
-	  xTaskCreate(PushupCounterTask,
-	  "PushupCounterTask",
-	  configMINIMAL_STACK_SIZE,
-	  NULL,
-	  1,
-	  NULL);
+  xTaskCreate(
+  PushupCounterTask,
+  "PushupCounterTask",
+  configMINIMAL_STACK_SIZE,
+  NULL,
+  1,
+  &PushupCounterTaskHandle);
 
-	  xTaskCreate(AreButtonsPressedTask,
-	  "AreButtonsPressedTask",
-	  configMINIMAL_STACK_SIZE,
-	  NULL,
-	  tskIDLE_PRIORITY,
-	  NULL);
+  xTaskCreate(AreButtonsPressedTask,
+  "AreButtonsPressedTask",
+  configMINIMAL_STACK_SIZE,
+  NULL,
+  tskIDLE_PRIORITY,
+  &AreButtonsPressedTaskHandle);
 
-	  xTaskCreate(LedCounterTask,
-	  "LedCounterTask",
-	  configMINIMAL_STACK_SIZE,
-	  NULL,
-	  tskIDLE_PRIORITY,
-	  NULL);
+  xTaskCreate(LedCounterTask,
+  "LedCounterTask",
+  configMINIMAL_STACK_SIZE,
+  NULL,
+  tskIDLE_PRIORITY,
+  &LedCounterTaskHandle);
+
+  xTaskCreate(CheckForExitTask,
+  "CheckForExitTask",
+  configMINIMAL_STACK_SIZE,
+  NULL,
+  tskIDLE_PRIORITY,
+  NULL);
+
 
   /* USER CODE END RTOS_THREADS */
 
@@ -355,6 +379,41 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -372,15 +431,14 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
-                          |GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
-                          |GPIO_PIN_6|GPIO_PIN_8, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4|GPIO_PIN_7, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_13|GPIO_PIN_3|GPIO_PIN_4
+                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -388,44 +446,34 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA2 PA7 PA8 PA9
-                           PA10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
-                          |GPIO_PIN_10;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PA3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /*Configure GPIO pins : PA5 PA6 */
   GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB10 PB3 PB4 PB5
-                           PB6 PB8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
-                          |GPIO_PIN_6|GPIO_PIN_8;
+  /*Configure GPIO pins : PA7 PA8 PA9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PC7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  /*Configure GPIO pins : PC4 PC7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB10 PB13 PB3 PB4
+                           PB5 PB6 PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_13|GPIO_PIN_3|GPIO_PIN_4
+                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB9 */
   GPIO_InitStruct.Pin = GPIO_PIN_9;
@@ -442,6 +490,32 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void setPushupTarget(void) {
+    char targetBuffer[10] = {0};
+    char ch;
+    int i = 0;
+
+    HAL_UART_Transmit(&huart2, (uint8_t *)"\033[2J\033[H", 7, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t *)"Enter pushup target: ", 21, HAL_MAX_DELAY);
+
+    while (i < sizeof(targetBuffer) - 1) {
+        HAL_UART_Receive(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+
+        if (ch == '\r') {
+            break;
+        }
+
+        HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+        targetBuffer[i++] = ch;
+    }
+
+    targetBuffer[i] = '\0';
+    PUSHUP_TARGET = atoi(targetBuffer);
+
+    sprintf(ultraBuffer, "\r\nTarget Set: %lu\r\n", PUSHUP_TARGET);
+    HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+}
+
 void AreButtonsPressedTask(void *argument){
 
 	for(;;){
@@ -455,7 +529,7 @@ void AreButtonsPressedTask(void *argument){
 
 void PushupCounterTask(void *argument)
 {
-        uint8_t downOk = 0;
+	uint8_t downOk = 0;
 	for(;;)
     {
 
@@ -463,7 +537,7 @@ void PushupCounterTask(void *argument)
 
         uint32_t distance = Get_Distance();
         if(isButtonsPressed){
-        	if(pushupCounter < TARGET){
+        	if(pushupCounter < PUSHUP_TARGET){
         		if(distance <= PUSHUP_DOWN_DISTANCE_CM && !downOk ){
         			downOk = 1;
         		}
@@ -473,15 +547,15 @@ void PushupCounterTask(void *argument)
         		}
         	} else {
         		handleWin();
-        		reset();
         		osDelay(500);
+        		reset();
         	}
         } else {
         	reset();
         }
 
-//        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
-//		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
+        sprintf(ultraBuffer, "Counter: %lu Distance: %lu\r\n", pushupCounter, distance);
+		HAL_UART_Transmit(&huart2, (uint8_t*)ultraBuffer, strlen(ultraBuffer), HAL_MAX_DELAY);
         osDelay(500);
     }
 }
@@ -516,7 +590,7 @@ uint32_t Get_Distance(void)
 
 void reset(void){
 	pushupCounter = 0;
-	for(int i = 0 ; i < TARGET ; i ++){
+	for(int i = 0 ; i < PUSHUP_TARGET ; i ++){
 		HAL_GPIO_WritePin(SEGMENT_PORTS[i], SEGMENT_PINS[i], GPIO_PIN_RESET);
 	}
 }
@@ -658,22 +732,39 @@ void playSound(uint32_t frequency, uint32_t duration_ms){
 	}
 }
 
-// TODO find out why 1 segment is blinking, 3 and 10 segment is not lighting
 void LedCounterTask(void *argument){
 
 	for(;;){
 		int32_t TOTAL_LEDS = 10;
 		int32_t ledCount = pushupCounter % TOTAL_LEDS;
+
 		for (int i = 0; i < TOTAL_LEDS; i++) {
-			if (i < ledCount) {
-				HAL_GPIO_WritePin(SEGMENT_PORTS[i], SEGMENT_PINS[i], GPIO_PIN_SET);
-			} else {
-				HAL_GPIO_WritePin(SEGMENT_PORTS[i], SEGMENT_PINS[i], GPIO_PIN_RESET);
-			}
+			HAL_GPIO_WritePin(SEGMENT_PORTS[i], SEGMENT_PINS[i], ledCount > i);
 		}
 
-		osDelay(500);
+		osDelay(300);
 	}
+}
+
+void CheckForExitTask(void *argument) {
+    char ch;
+    for (;;) {
+        HAL_UART_Receive(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+        if (ch == 'J' || ch == 'j') {
+        	vTaskSuspend(PushupCounterTaskHandle);
+			vTaskSuspend(AreButtonsPressedTaskHandle);
+			vTaskSuspend(LedCounterTaskHandle);
+
+            HAL_UART_Transmit(&huart2, (uint8_t *)"\r\nResetting...\r\n", 17, HAL_MAX_DELAY);
+            reset();
+            setPushupTarget();
+
+            vTaskResume(PushupCounterTaskHandle);
+            vTaskResume(AreButtonsPressedTaskHandle);
+            vTaskResume(LedCounterTaskHandle);
+        }
+        osDelay(100);
+    }
 }
 
 /* USER CODE END 4 */
