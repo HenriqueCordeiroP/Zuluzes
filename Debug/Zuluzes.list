@@ -1632,9 +1632,9 @@ static void MX_GPIO_Init(void)
  800106c:	687b      	ldr	r3, [r7, #4]
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7|GPIO_PIN_8, GPIO_PIN_RESET);
  800106e:	2200      	movs	r2, #0
- 8001070:	f44f 7160 	mov.w	r1, #896	@ 0x380
+ 8001070:	f44f 71c0 	mov.w	r1, #384	@ 0x180
  8001074:	f04f 4090 	mov.w	r0, #1207959552	@ 0x48000000
  8001078:	f001 f858 	bl	800212c <HAL_GPIO_WritePin>
 
@@ -1646,12 +1646,12 @@ static void MX_GPIO_Init(void)
  8001082:	f001 f853 	bl	800212c <HAL_GPIO_WritePin>
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_13|GPIO_PIN_3|GPIO_PIN_4
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2|GPIO_PIN_10|GPIO_PIN_13|GPIO_PIN_3
  8001086:	2200      	movs	r2, #0
- 8001088:	f242 5178 	movw	r1, #9592	@ 0x2578
+ 8001088:	f242 517c 	movw	r1, #9596	@ 0x257c
  800108c:	482f      	ldr	r0, [pc, #188]	@ (800114c <MX_GPIO_Init+0x154>)
  800108e:	f001 f84d 	bl	800212c <HAL_GPIO_WritePin>
-                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8, GPIO_PIN_RESET);
+                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -1685,9 +1685,9 @@ static void MX_GPIO_Init(void)
  80010c0:	f04f 4090 	mov.w	r0, #1207959552	@ 0x48000000
  80010c4:	f000 fe70 	bl	8001da8 <HAL_GPIO_Init>
 
-  /*Configure GPIO pins : PA7 PA8 PA9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
- 80010c8:	f44f 7360 	mov.w	r3, #896	@ 0x380
+  /*Configure GPIO pins : PA7 PA8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8;
+ 80010c8:	f44f 73c0 	mov.w	r3, #384	@ 0x180
  80010cc:	617b      	str	r3, [r7, #20]
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
  80010ce:	2301      	movs	r3, #1
@@ -1723,12 +1723,12 @@ static void MX_GPIO_Init(void)
  80010fe:	4812      	ldr	r0, [pc, #72]	@ (8001148 <MX_GPIO_Init+0x150>)
  8001100:	f000 fe52 	bl	8001da8 <HAL_GPIO_Init>
 
-  /*Configure GPIO pins : PB10 PB13 PB3 PB4
-                           PB5 PB6 PB8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_13|GPIO_PIN_3|GPIO_PIN_4
- 8001104:	f242 5378 	movw	r3, #9592	@ 0x2578
+  /*Configure GPIO pins : PB2 PB10 PB13 PB3
+                           PB4 PB5 PB6 PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_10|GPIO_PIN_13|GPIO_PIN_3
+ 8001104:	f242 537c 	movw	r3, #9596	@ 0x257c
  8001108:	617b      	str	r3, [r7, #20]
-                          |GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8;
+                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
  800110a:	2301      	movs	r3, #1
  800110c:	61bb      	str	r3, [r7, #24]
